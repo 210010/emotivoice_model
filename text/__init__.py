@@ -104,4 +104,3 @@ if __name__ == "__main__":
   print(_clean_text("제 전화번호는 01012345678이에요.", ['korean_cleaners']))
   print(_clean_text("‘아줌마’는 결혼한 여자를 뜻한다.", ['korean_cleaners']))
   print(text_to_sequence("‘아줌마’는 결혼한 여자를 뜻한다. ‘아줌마’는 결혼한 여자를 뜻한다.", ['korean_cleaners']))
-
