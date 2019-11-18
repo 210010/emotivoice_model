@@ -61,9 +61,9 @@ class STL(nn.Module):
     def __init__(self, hp):
         super().__init__()
         self.embed = nn.Parameter(torch.FloatTensor(hp.token_num, hp.E // hp.num_heads))
-        d_q = hp.E // 2
+        self.d_q = hp.E // 2
         d_k = hp.E // hp.num_heads
-        self.attention = MultiHeadAttention(query_dim=d_q, key_dim=d_k, num_units=hp.E, num_heads=hp.num_heads)
+        self.attention = MultiHeadAttention(query_dim=self.d_q, key_dim=d_k, num_units=hp.E, num_heads=hp.num_heads)
 
         init.normal_(self.embed, mean=0, std=0.5)
 
