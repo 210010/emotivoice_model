@@ -3,3 +3,11 @@ __pycache__
 .ipynb_checkpoints
 README_bac.md
 notes.md
+
+apex
+outdir
+waveglow*
+*.png
+*.wav
+*.out
+*logs
