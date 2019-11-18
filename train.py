@@ -28,6 +28,15 @@ def batchnorm_to_float(module):
     return module
 
 
+def lstmcell_to_float(module):
+    """Converts LSTMCell modules to FP32"""
+    if isinstance(module, torch.nn.LSTMCell):
+        module.float()
+    for child in module.children():
+        lstmcell_to_float(child)
+    return module
+
+    
 def reduce_tensor(tensor, n_gpus):
     rt = tensor.clone()
     dist.all_reduce(rt, op=dist.reduce_op.SUM)
@@ -78,10 +87,11 @@ def prepare_directories_and_logger(output_directory, log_directory, rank):
     return logger
 
 
-def load_model(hparams):
-    model = Tacotron2(hparams).cuda()
+def load_model(hparams, device=torch.device('cuda')):
+    model = Tacotron2(hparams).to(device)
     if hparams.fp16_run:
         model = batchnorm_to_float(model.half())
+        model = lstmcell_to_float(model)
         model.decoder.attention_layer.score_mask_value = float(finfo('float16').min)
 
     if hparams.distributed_run:
@@ -280,6 +290,8 @@ if __name__ == '__main__':
     print("Distributed Run:", hparams.distributed_run)
     print("cuDNN Enabled:", hparams.cudnn_enabled)
     print("cuDNN Benchmark:", hparams.cudnn_benchmark)
+
+    args.output_directory = os.path.join(args.output_directory, str(int(time.time())))    
 
     train(args.output_directory, args.log_directory, args.checkpoint_path,
           args.warm_start, args.n_gpus, args.rank, args.group_name, hparams)
