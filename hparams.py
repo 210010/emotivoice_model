@@ -1,14 +1,14 @@
 import tensorflow as tf
-from text.symbols import kor_symbols as symbols
 
 def create_hparams(hparams_string=None, verbose=False):
+    from text.symbols import kor_symbols as symbols
     """Create model hyperparameters. Parse nondefault from given string."""
 
     hparams = tf.contrib.training.HParams(
         ################################
         # Experiment Parameters        #
         ################################
-        epochs=30,
+        epochs=30000,
         iters_per_checkpoint=500,
         seed=1234,
         dynamic_loss_scaling=True,
@@ -34,7 +34,7 @@ def create_hparams(hparams_string=None, verbose=False):
         # Audio Parameters             #
         ################################
         max_wav_value=32768.0,
-        sampling_rate=16000,
+        sampling_rate=22050,
         filter_length=1024,
         hop_length=256, # number audio of frames between stft colmns, default win_length/4
         win_length=1024, # win_length int <= n_ftt: fft window size (frequency domain), defaults to win_length = n_fft
@@ -87,11 +87,11 @@ def create_hparams(hparams_string=None, verbose=False):
         ################################
         # Optimization Hyperparameters #
         ################################
-        use_saved_learning_rate=False,
+        use_saved_learning_rate=True,
         learning_rate=1e-3,
         weight_decay=1e-6,
         grad_clip_thresh=1.0,
-        batch_size=64,
+        batch_size=32,
         mask_padding=True,  # set model's padded outputs to padded values
 
         #######################3
