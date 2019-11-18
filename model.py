@@ -351,13 +351,17 @@ class Decoder(nn.Module):
         gate_output: gate output energies
         attention_weights:
         """
+        lstmcell_dtype = self.attention_hidden.dtype
+
         cell_input = torch.cat((decoder_input, self.attention_context), -1)
         self.attention_hidden, self.attention_cell = self.attention_rnn(
-            cell_input, (self.attention_hidden, self.attention_cell))
+            cell_input.float(), (self.attention_hidden.float(), self.attention_cell.float()))
         self.attention_hidden = F.dropout(
             self.attention_hidden, self.p_attention_dropout, self.training)
         self.attention_cell = F.dropout(
             self.attention_cell, self.p_attention_dropout, self.training)
+            
+        self.attention_hidden = self.attention_hidden.to(lstmcell_dtype)
 
         attention_weights_cat = torch.cat(
             (self.attention_weights.unsqueeze(1),
@@ -370,12 +374,14 @@ class Decoder(nn.Module):
         decoder_input = torch.cat(
             (self.attention_hidden, self.attention_context), -1)
         self.decoder_hidden, self.decoder_cell = self.decoder_rnn(
-            decoder_input, (self.decoder_hidden, self.decoder_cell))
+            decoder_input.float(), (self.decoder_hidden.float(), self.decoder_cell.float()))
         self.decoder_hidden = F.dropout(
             self.decoder_hidden, self.p_decoder_dropout, self.training)
         self.decoder_cell = F.dropout(
             self.decoder_cell, self.p_decoder_dropout, self.training)
 
+        self.decoder_hidden = self.decoder_hidden.to(lstmcell_dtype)
+        
         decoder_hidden_attention_context = torch.cat(
             (self.decoder_hidden, self.attention_context), dim=1)
         decoder_output = self.linear_projection(
@@ -529,3 +535,47 @@ class Tacotron2(nn.Module):
             [mel_outputs, mel_outputs_postnet, gate_outputs, alignments],
             output_lengths)
 
+    def inference_by_ref_audio(self, transcript_sequence, ref_audio_mel):
+        embedded_inputs = self.embedding(transcript_sequence).transpose(1, 2)
+        transcript_outputs = self.encoder.inference(embedded_inputs)
+
+        latent_vector = self.gst(ref_audio_mel)
+        latent_vector = latent_vector.expand_as(transcript_outputs)
+
+        encoder_outputs = transcript_outputs + latent_vector
+
+        mel_outputs, gate_outputs, alignments = self.decoder.inference(
+            encoder_outputs)
+
+        mel_outputs_postnet = self.postnet(mel_outputs)
+        mel_outputs_postnet = mel_outputs + mel_outputs_postnet
+
+        outputs = self.parse_output(
+            [mel_outputs, mel_outputs_postnet, gate_outputs, alignments])
+
+        return outputs
+    
+    def inference_by_style_tokens(self, transcript_sequence):
+        embedded_inputs = self.embedding(transcript_sequence).transpose(1, 2)
+        transcript_outputs = self.encoder.inference(embedded_inputs)
+
+        GST = torch.tanh(self.gst.stl.embed)
+
+        outputs_by_token = []
+        for idx in range(10):
+            query = torch.zeros(1, 1, self.gst.stl.d_q)
+            keys = GST[idx].unsqueeze(0).expand(1,-1,-1)
+            style_emb = self.gst.stl.attention(query, keys)
+            encoder_outputs = transcript_outputs + style_emb
+
+            mel_outputs, gate_outputs, alignments = self.decoder.inference(
+            encoder_outputs)
+
+            mel_outputs_postnet = self.postnet(mel_outputs)
+            mel_outputs_postnet = mel_outputs + mel_outputs_postnet
+
+            outputs = self.parse_output(
+                [mel_outputs, mel_outputs_postnet, gate_outputs, alignments])
+
+            outputs_by_token.append(outputs)
+        return outputs_by_token
