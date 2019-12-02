@@ -4,10 +4,10 @@ import numpy as np
 import torch
 
 from hparams import create_hparams
-from model import Tacotron2
+from model_tacotron2 import Tacotron2
 from layers import TacotronSTFT, STFT
 from audio_processing import griffin_lim
-from train import load_model
+from train import load_Tacotron2
 from text import text_to_sequence
 from denoiser import Denoiser
 
@@ -15,6 +15,8 @@ from utils import load_wav_to_torch
 from scipy.io.wavfile import write
 import matplotlib.pylab as plt
 from plotting_utils import plot_spectrogram_to_numpy
+
+import argparse
 
 def load_mel(path, stft, hparams):
     audio, sampling_rate = load_wav_to_torch(path)
@@ -32,7 +34,7 @@ def plot_data(fname, data, figsize=(16, 4)):
     plt.figure(figsize=figsize)
     plt.imsave(fname, data)
 
-def generate_mels_by_ref_audio(model, waveglow, hparams, text, ref_wav, denoiser_strength=0.01, device=torch.device('cpu')):
+def generate_mels_by_ref_audio(model, waveglow, hparams, text, ref_wav, denoiser_strength=0.01, device=torch.device('cpu'), *, outpath='output.wav'):
     # Prepare ref audio input
     ref_audio_mel = load_mel(ref_wav, 
                 TacotronSTFT(
@@ -50,7 +52,7 @@ def generate_mels_by_ref_audio(model, waveglow, hparams, text, ref_wav, denoiser
     # Synthesize audio from spectrogram using WaveGlow
     with torch.no_grad():
         audio = waveglow.infer(mel_outputs_postnet, sigma=0.666, device=torch.device('cpu'))
-    write("output.wav", hparams.sampling_rate, audio[0].data.cpu().numpy())
+    write(outpath, hparams.sampling_rate, audio[0].data.cpu().numpy())
 
     # (Optional) Remove WaveGlow bias
     if denoiser_strength > 0:
@@ -84,8 +86,9 @@ if __name__=="__main__":
     hparams = create_hparams()
 
     # Load model from checkpoint
-    checkpoint_path = "./outdir/1573832357/checkpoint_57500"
-    model = load_model(hparams, device)
+    checkpoint_path = "./outdir/4/checkpoint_57500"
+    # checkpoint_path = "./outdir/4/checkpoint_112500"
+    model, _ = load_Tacotron2(hparams, device)
     model.load_state_dict(torch.load(checkpoint_path, map_location=device)['state_dict'])
     _ = model.eval()
 
@@ -95,12 +98,44 @@ if __name__=="__main__":
     waveglow.eval()
     denoiser = Denoiser(waveglow, device=device)
 
-    # Prepare text input
-    text = "이것은 감정을 담아 말하는 음성합성기 입니다."
-    sequence = np.array(text_to_sequence(text, ['korean_cleaners']))[None, :]
+
+    # CLI setup
+    default_text = "이것은 감정을 담아 말하는 음성합성기 입니다."
+    default_ref = "/home/tts_team/ai_workspace/data/emotiontts_new/04.Emotion/ema/wav_22k/ema00350.wav"
+    default_out = "output.wav"
+
+    # arguments parser settup
+    parser = argparse.ArgumentParser()
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('--ref-wav', default=default_ref)
+    group.add_argument('--predef-style')
+    parser.add_argument('--text', default=default_text)
+    parser.add_argument('--out', default=default_out)
+    args = parser.parse_args()
+
+    if args.predef_style:
+        style, _idx = args.predef_style.split('_')
+        idx = int(_idx)
+        if style == 'neutral':
+            idx += 0
+        elif style == 'happy':
+            idx += 100
+        elif style == 'sad':
+            idx += 200
+        elif style == 'angry':
+            idx += 300
+        else:
+            raise ValueError(f'invalid style {style}')
+            
+        ref_wav = f'/home/tts_team/ai_workspace/data/emotiontts_new/04.Emotion/ema/wav_22k/ema00{idx+1:03}.wav'
+    else:
+        ref_wav = args.ref_wav
+
+    sequence = np.array(text_to_sequence(args.text, ['korean_cleaners']))[None, :]
     sequence = torch.autograd.Variable(torch.from_numpy(sequence)).long()
 
     # Generate outfiles
-    ref_wav = "/data/emotiontts_new/04.Emotion/ema/wav_22k/ema00001.wav"
-    generate_mels_by_ref_audio(model, waveglow, hparams, text, ref_wav, denoiser_strength=0)
-    generate_mels_by_sytle_tokens(model, waveglow, hparams, text, denoiser_strength=0)
+    generate_mels_by_ref_audio(model, waveglow, hparams, args.text, ref_wav, denoiser_strength=0, outpath=args.out)
+
+    if False:
+        generate_mels_by_sytle_tokens(model, waveglow, hparams, text, denoiser_strength=0)
