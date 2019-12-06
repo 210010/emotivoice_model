@@ -1,5 +1,4 @@
 import sys
-sys.path.append('waveglow/')
 import numpy as np
 import torch
 
@@ -9,7 +8,6 @@ from layers import TacotronSTFT, STFT
 from audio_processing import griffin_lim
 from train import load_Tacotron2
 from text import text_to_sequence
-from denoiser import Denoiser
 
 from utils import load_wav_to_torch
 from scipy.io.wavfile import write
@@ -18,7 +16,7 @@ from plotting_utils import plot_spectrogram_to_numpy
 
 import argparse
 
-def load_mel(path, stft, hparams):
+def load_mel(path, stft, hparams, device=torch.device("cpu")):
     audio, sampling_rate = load_wav_to_torch(path)
     if sampling_rate != hparams.sampling_rate:
         raise ValueError("{} SR doesn't match target {} SR".format(
@@ -27,7 +25,7 @@ def load_mel(path, stft, hparams):
     audio_norm = audio_norm.unsqueeze(0)
     audio_norm = torch.autograd.Variable(audio_norm, requires_grad=False)
     melspec = stft.mel_spectrogram(audio_norm)
-    melspec = melspec
+    melspec = melspec.to(device)
     return melspec
 
 def plot_data(fname, data, figsize=(16, 4)):
@@ -41,7 +39,7 @@ def generate_mels_by_ref_audio(model, waveglow, hparams, text, ref_wav, denoiser
                     hparams.filter_length, hparams.hop_length, hparams.win_length,
                     hparams.n_mel_channels, hparams.sampling_rate, hparams.mel_fmin,
                     hparams.mel_fmax), 
-                hparams)
+                hparams, device)
 
     # Decode text input and 
     mel_outputs, mel_outputs_postnet, _, alignments = model.inference_by_ref_audio(sequence, ref_audio_mel)
@@ -51,7 +49,7 @@ def generate_mels_by_ref_audio(model, waveglow, hparams, text, ref_wav, denoiser
 
     # Synthesize audio from spectrogram using WaveGlow
     with torch.no_grad():
-        audio = waveglow.infer(mel_outputs_postnet, sigma=0.666, device=torch.device('cpu'))
+        audio = waveglow.infer(mel_outputs_postnet, sigma=0.666)
     write(outpath, hparams.sampling_rate, audio[0].data.cpu().numpy())
 
     # (Optional) Remove WaveGlow bias
@@ -80,6 +78,9 @@ def generate_mels_by_sytle_tokens(model, waveglow, hparams, text, denoiser_stren
 
 
 if __name__=="__main__":
+    import time
+    start = time.time()
+
     device = torch.device('cpu')
 
     # Setup hparams
@@ -87,16 +88,21 @@ if __name__=="__main__":
 
     # Load model from checkpoint
     checkpoint_path = "./outdir/4/checkpoint_57500"
-    # checkpoint_path = "./outdir/4/checkpoint_112500"
     model, _ = load_Tacotron2(hparams, device)
     model.load_state_dict(torch.load(checkpoint_path, map_location=device)['state_dict'])
     _ = model.eval()
 
-    # Load WaveGlow for mel2audio synthesis and denoiser
+    # Load WaveGlow for mel2audio synthesis
+    if device == torch.device('cuda'):
+        sys.path.insert(0, "waveglow/") # To look glow(original version) first
+        from waveglow.denoiser import Denoiser
+    else:
+        sys.path.insert(0, "waveglow_cpu_components/") # To look glow(cpu version) first
+        from waveglow_cpu_components.denoiser import Denoiser
     waveglow_path = './waveglow/waveglow_170000_22k'
     waveglow = torch.load(waveglow_path, map_location=device)['model']
     waveglow.eval()
-    denoiser = Denoiser(waveglow, device=device)
+    denoiser = Denoiser(waveglow).to(device)
 
 
     # CLI setup
@@ -116,26 +122,32 @@ if __name__=="__main__":
     if args.predef_style:
         style, _idx = args.predef_style.split('_')
         idx = int(_idx)
-        if style == 'neutral':
+        if style == 'neutral': # a
             idx += 0
-        elif style == 'happy':
+            speaker = "ema"
+        elif style == 'happy': # c
             idx += 100
-        elif style == 'sad':
+            speaker = "emc"
+        elif style == 'sad': # d
             idx += 200
-        elif style == 'angry':
+            speaker = "emd"
+        elif style == 'angry': # e
             idx += 300
+            speaker = "eme"
         else:
             raise ValueError(f'invalid style {style}')
             
-        ref_wav = f'/home/tts_team/ai_workspace/data/emotiontts_new/04.Emotion/ema/wav_22k/ema00{idx+1:03}.wav'
+        ref_wav = f'/home/tts_team/ai_workspace/data/emotiontts_new/04.Emotion/{speaker}/wav_22k/{speaker}00{idx+1:03}.wav'
     else:
         ref_wav = args.ref_wav
 
     sequence = np.array(text_to_sequence(args.text, ['korean_cleaners']))[None, :]
-    sequence = torch.autograd.Variable(torch.from_numpy(sequence)).long()
+    sequence = torch.autograd.Variable(torch.from_numpy(sequence)).to(device).long()
 
     # Generate outfiles
-    generate_mels_by_ref_audio(model, waveglow, hparams, args.text, ref_wav, denoiser_strength=0, outpath=args.out)
+    generate_mels_by_ref_audio(model, waveglow, hparams, args.text, ref_wav, denoiser_strength=0, device=device, outpath=args.out)
 
     if False:
-        generate_mels_by_sytle_tokens(model, waveglow, hparams, text, denoiser_strength=0)
+        generate_mels_by_sytle_tokens(model, waveglow, hparams, args.text, denoiser_strength=0, device=device)
+    
+    print("time :", time.time() - start)

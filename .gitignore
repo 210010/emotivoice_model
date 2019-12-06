@@ -6,7 +6,7 @@ notes.md
 
 apex
 outdir
-waveglow*
+waveglow/
 *.png
 *.wav
 *.out
