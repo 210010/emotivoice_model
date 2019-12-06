@@ -6,7 +6,7 @@ from torch.nn import functional as F
 from layers import ConvNorm, ConvNorm2D, LinearNorm
 from utils import to_gpu, get_mask_from_lengths
 from fp16_optimizer import fp32_to_fp16, fp16_to_fp32
-from modules import GST
+from gst_modules import GST
 
 drop_rate = 0.5
 class LocationLayer(nn.Module):

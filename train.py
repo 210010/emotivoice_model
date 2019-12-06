@@ -12,9 +12,11 @@ from torch.utils.data import DataLoader
 
 from fp16_optimizer import FP16_Optimizer
 
-from model import Tacotron2
+from model_tacotron2 import Tacotron2
+# from model_transformer import Transformer
 from data_utils import TextMelLoader, TextMelCollate
 from loss_function import Tacotron2Loss
+# from loss_funtion import TransformerLoss
 from logger import Tacotron2Logger
 from hparams import create_hparams
 
@@ -87,7 +89,7 @@ def prepare_directories_and_logger(output_directory, log_directory, rank):
     return logger
 
 
-def load_model(hparams, device=torch.device('cuda')):
+def load_Tacotron2(hparams, device=torch.device('cuda')):
     model = Tacotron2(hparams).to(device)
     if hparams.fp16_run:
         model = batchnorm_to_float(model.half())
@@ -97,7 +99,17 @@ def load_model(hparams, device=torch.device('cuda')):
     if hparams.distributed_run:
         model = apply_gradient_allreduce(model)
 
-    return model
+    return model, Tacotron2Loss()
+
+def load_Transformer(hparams, device=torch.device('cuda')):
+    model = torch.nn.modules.Transformer(hparams).to(device)
+    if hparams.fp16_run:
+        assert False, "Not support fp16 for Transformer now."
+
+    if hparams.distributed_run:
+        model = apply_gradient_allreduce(model)
+
+    return model, TransformerLoss()
 
 
 def warm_start_model(checkpoint_path, model):
@@ -158,12 +170,13 @@ def validate(model, criterion, valset, iteration, batch_size, n_gpus,
         logger.log_validation(reduced_val_loss, model, y, y_pred, iteration)
 
 
-def train(output_directory, log_directory, checkpoint_path, warm_start, n_gpus,
+def train(network, output_directory, log_directory, checkpoint_path, warm_start, n_gpus,
           rank, group_name, hparams):
     """Training and validation logging results to tensorboard and stdout
 
     Params
     ------
+    network (string)
     output_directory (string): directory to save checkpoints
     log_directory (string) directory to save tensorboard logs
     checkpoint_path(string): checkpoint path
@@ -177,7 +190,13 @@ def train(output_directory, log_directory, checkpoint_path, warm_start, n_gpus,
     torch.manual_seed(hparams.seed)
     torch.cuda.manual_seed(hparams.seed)
 
-    model = load_model(hparams)
+    if network == "tacotron2":
+        model, criterion = load_Tacotron2(hparams)
+    elif network == "transformer":
+        model, criterion = load_Transformer(hparams) #TODO
+    else:
+        assert False, "Undefined model."
+
     learning_rate = hparams.learning_rate
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate,
                                  weight_decay=hparams.weight_decay)
@@ -187,8 +206,6 @@ def train(output_directory, log_directory, checkpoint_path, warm_start, n_gpus,
 
     if hparams.distributed_run:
         model = apply_gradient_allreduce(model)
-
-    criterion = Tacotron2Loss()
 
     logger = prepare_directories_and_logger(
         output_directory, log_directory, rank)
@@ -278,6 +295,8 @@ if __name__ == '__main__':
                         required=False, help='Distributed group name')
     parser.add_argument('--hparams', type=str,
                         required=False, help='comma separated name=value pairs')
+    parser.add_argument('--network', type=str, choices=['tacotron2'],
+                        required=True, help='choose network')
 
     args = parser.parse_args()
     hparams = create_hparams(args.hparams)
@@ -290,8 +309,9 @@ if __name__ == '__main__':
     print("Distributed Run:", hparams.distributed_run)
     print("cuDNN Enabled:", hparams.cudnn_enabled)
     print("cuDNN Benchmark:", hparams.cudnn_benchmark)
+    print("Network:", args.network)
 
     args.output_directory = os.path.join(args.output_directory, str(int(time.time())))    
 
-    train(args.output_directory, args.log_directory, args.checkpoint_path,
+    train(args.network, args.output_directory, args.log_directory, args.checkpoint_path,
           args.warm_start, args.n_gpus, args.rank, args.group_name, hparams)
