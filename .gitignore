@@ -11,4 +11,5 @@ waveglow/
 *.wav
 *.out
 *logs
+*log
 *test*
