@@ -1,5 +1,6 @@
 import argparse
 from tornado.httpclient import HTTPClient
+from tornado.escape import url_escape
 
 if __name__=="__main__":
     import time
@@ -20,7 +21,11 @@ if __name__=="__main__":
     args = parser.parse_args()
 
     http_client = HTTPClient()
-    url = "http://localhost:8888?ref-wav={}&predef-style={}&text={}&out={}".format(args.ref_wav, args.predef_style, args.text, args.out)
+    ref_wav = url_escape(args.ref_wav)
+    predef_style = url_escape(args.predef_style)
+    text = url_escape(args.text)
+    out = url_escape(args.out)
+    url = "http://localhost:8888?ref-wav={}&predef-style={}&text={}&out={}".format(ref_wav, predef_style, text, out)
     response = http_client.fetch(url)
 
     print("time :", time.time() - start)

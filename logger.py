@@ -4,6 +4,11 @@ from tensorboardX import SummaryWriter
 from plotting_utils import plot_alignment_to_numpy, plot_spectrogram_to_numpy
 from plotting_utils import plot_gate_outputs_to_numpy
 
+import tornado
+import logging
+import sys
+from tornado import options
+options.options.mockable()
 
 class Tacotron2Logger(SummaryWriter):
     def __init__(self, logdir):
@@ -46,3 +51,31 @@ class Tacotron2Logger(SummaryWriter):
                 gate_targets[idx].data.cpu().numpy(),
                 F.sigmoid(gate_outputs[idx]).data.cpu().numpy()),
             iteration)
+
+class TornadoLogger():
+    def __init__(self):
+        self.logger = logging.getLogger()
+        self.formatter = logging.Formatter(
+                '[%(levelname)1.1s %(asctime)s.%(msecs)d '
+                '%(module)s:%(lineno)d] %(message)s',
+                "%Y-%m-%d %H:%M:%S")
+        tornado.options.define("access_to_stdout", default=True, help="Log tornado.access to stdout")
+        self.bootstrap()
+
+    # tornado server logging
+    def init_logging(self, access_to_stdout=False):
+        if access_to_stdout:
+            access_log = logging.getLogger('tornado.access')
+            access_log.propagate = False
+            # make sure access log is enabled even if error level is WARNING|ERROR
+            access_log.setLevel(logging.INFO)
+            stdout_handler = logging.StreamHandler(sys.stdout)
+            stdout_handler.setFormatter(self.formatter)
+            access_log.addHandler(stdout_handler)
+        
+        for handler in self.logger.handlers:  # setting format for all handlers
+            handler.setFormatter(self.formatter)
+
+    def bootstrap(self):
+        tornado.options.parse_command_line(final=True)
+        self.init_logging(tornado.options.options.access_to_stdout)

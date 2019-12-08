@@ -14,6 +14,11 @@ from scipy.io.wavfile import write
 import matplotlib.pylab as plt
 from plotting_utils import plot_spectrogram_to_numpy
 
+import tornado.ioloop
+import tornado.web
+from logger import TornadoLogger
+from tornado.escape import url_unescape
+
 def load_mel(path, stft, hparams, device=torch.device("cpu")):
     audio, sampling_rate = load_wav_to_torch(path)
     if sampling_rate != hparams.sampling_rate:
@@ -74,25 +79,22 @@ def generate_mels_by_sytle_tokens(model, waveglow, hparams, sequence, denoiser, 
             audio_denoised = audio_denoised * hparams.max_wav_value
             write("denoised_output_{}.wav".format(i), hparams.sampling_rate, audio_denoised.squeeze().cpu().numpy().astype('int16'))
 
-import tornado.ioloop
-import tornado.web
 
 class MainHandler(tornado.web.RequestHandler):
-    def initialize(self, model, waveglow, hparams, denoiser, device):
+    def initialize(self, model, waveglow, hparams, denoiser, device, logger):
         self.model = model
         self.waveglow = waveglow
         self.hparams = hparams
         self.denoiser = denoiser
         self.device = device
+        self.logger = logger
 
     def get(self):
-
-        ref_wav = self.get_argument("ref-wav", default="")
-        predef_style = self.get_argument("predef-style", default="")
-        text = self.get_argument("text", default="이것은 감정을 담아 말하는 음성합성기 입니다.")
-        out = self.get_argument("out", default="output.wav")
-
-        print(ref_wav, predef_style, text, out)
+        ref_wav = url_unescape(self.get_argument("ref-wav", default=""))
+        predef_style = url_unescape(self.get_argument("predef-style", default=""))
+        text = url_unescape(self.get_argument("text", default="이것은 감정을 담아 말하는 음성합성기 입니다."))
+        out = url_unescape(self.get_argument("out", default="output.wav"))
+        self.logger.info("Unescaped Text: {}".format(text))
 
         if predef_style:
             style, _idx = predef_style.split('_')
@@ -125,9 +127,9 @@ class MainHandler(tornado.web.RequestHandler):
         
         self.write("")
 
-def make_app(model, waveglow, hparams, denoiser, device):
+def make_app(model, waveglow, hparams, denoiser, device, logger):
     return tornado.web.Application([
-        (r"/", MainHandler, dict(model=model, waveglow=waveglow, hparams=hparams, denoiser=denoiser, device=device)),
+        (r"/", MainHandler, dict(model=model, waveglow=waveglow, hparams=hparams, denoiser=denoiser, device=device, logger=logger)),
     ])
 
 if __name__=="__main__":
@@ -155,6 +157,11 @@ if __name__=="__main__":
     denoiser = Denoiser(waveglow).to(device)
 
     # Start Server
-    app = make_app(model, waveglow, hparams, denoiser, device)
+    tornado_logger = TornadoLogger()
+    logger = tornado_logger.logger
+    logger.info("Server Start")
+
+    app = make_app(model, waveglow, hparams, denoiser, device, logger)
     app.listen(8888)
     tornado.ioloop.IOLoop.current().start()
+    
