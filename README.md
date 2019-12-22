@@ -30,8 +30,8 @@
     * `./filelists/emotiontts_net/*.txt`
     * path | text
     ```
-    /emotiontts_new/01.Main/wav_22k/lmy00600.wav|아날로그와 디지털 장비에 있어 외관의 차이는 거의 없지만 신뢰성이 높으며 빠르고 복잡한 신호까지 포착할 수 있습니다.
-    /emotiontts_new/01.Main/wav_22k/lmy00503.wav|방영 시간은 매주 목요일밤 10시에서 10시 54분까지, 총 12회 방영 예정입니다.
+    <yourDataDirPath>/emotiontts_new/01.Main/wav_22k/lmy00600.wav|아날로그와 디지털 장비에 있어 외관의 차이는 거의 없지만 신뢰성이 높으며 빠르고 복잡한 신호까지 포착할 수 있습니다.
+    <yourDataDirPath>/emotiontts_new/01.Main/wav_22k/lmy00503.wav|방영 시간은 매주 목요일밤 10시에서 10시 54분까지, 총 12회 방영 예정입니다.
     ```
 
 ## Training
