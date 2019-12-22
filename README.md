@@ -50,7 +50,6 @@
 ## Inference
 ### Vocoder
 - Clone [WaveGlow](https://github.com/NVIDIA/waveglow) as ./waveglow
-- Use checkpoint in ./waveglow_ckpt/* for inference
 
 #### waveglow_cpu_component
 - This is WaveGlow modules for the CPU inference version
