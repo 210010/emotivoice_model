@@ -40,8 +40,8 @@
 3. CD into this repo: `cd tacotron2-gst`
 4. Initialize submodule: `git submodule init; git submodule update`
 5. Install python requirements: `pip install -r requirements.txt`
-6. Training (multi node ver.)
->> `python3 -m multiproc -u train.py --output_directory=outdir --log_directory=logdir --hparams=distributed_run=True,training_files='filelists/emotiontts_new/emotts_new_train.txt',validation_files='filelists/emotiontts_new/emotts_new_valid.txt',batch_size=6 --network=tacotron2`
+6. Training (multi node ver.):
+`python3 -m multiproc -u train.py --output_directory=outdir --log_directory=logdir --hparams=distributed_run=True,training_files='filelists/emotiontts_new/emotts_new_train.txt',validation_files='filelists/emotiontts_new/emotts_new_valid.txt',batch_size=6 --network=tacotron2`
 7. Monitoring: `tensorboard --logdir=outdir/logdir --host=127.0.0.1`
 8. Training results (~ 288,000 steps)
 
@@ -57,10 +57,10 @@
 - Automatically imported when inferencing by CPU
 
 ### Inference API daemon (for fast inference)
->> `python3 inference_daemon.py`
+`python3 inference_daemon.py`
 
 ### Entrypoint
->> `python3 inference.py --predef-style=happy_004 --text="이것은 감정을 담은 목소리입니다."`
+`python3 inference.py --predef-style=happy_004 --text="이것은 감정을 담은 목소리입니다."`
     
 ### Condition on Reference Audio
 - Generate voice that follows the style of the reference audio
